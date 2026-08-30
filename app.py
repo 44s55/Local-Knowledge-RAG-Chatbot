@@ -1,4 +1,3 @@
-# app.py
 """
 RAG 智能问答系统 - 程序入口
 企业级工程入口：app.py
@@ -14,8 +13,8 @@ sys.path.append(".")
 from utils.retriever import Retriever
 from run_llm import chat_with_llm
 
-# 下面剩下的代码全部不动，保持你原来rag_chat函数和if __name__ == "__main__"
-
+# 全局只初始化1次检索器，不要每次问答重复新建对象
+retriever_global = Retriever()
 
 
 def rag_chat(question: str) -> dict:
@@ -24,8 +23,7 @@ def rag_chat(question: str) -> dict:
     :param question: 用户问题
     :return: dict{question, answer, sources}
     """
-    retriever = Retriever()
-    context, source_list = retriever.get_context(question, top_k=4)
+    context, source_list = retriever_global.get_context(question, top_k=4)
     print(f"\n[DEBUG调试] source_list = {source_list}")
 
     system_prompt = """你是基于本地知识库的问答助手。
@@ -63,4 +61,3 @@ if __name__ == "__main__":
         print("\n【引用来源】")
         for s in result["sources"]:
             print(f"- {s['source']}，距离：{s['score']:.4f}")
-

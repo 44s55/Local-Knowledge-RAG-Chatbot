@@ -7,6 +7,6 @@ chromadb==0.6.3
 python-dotenv==1.1.0
 pypdf==5.1.0
 rank_bm25>=0.2.2
-
-# 【可选依赖】本地BGE reranker重排模型，需要本地重排再取消注释安装
+gradio==4.40.0
+pydantic==2.9.2
 # sentence-transformers>=2.7.0

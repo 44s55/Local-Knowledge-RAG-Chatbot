@@ -1,13 +1,29 @@
 # utils/vector_store.py
 import os
 import chromadb
+from abc import ABC, abstractmethod
 from chromadb.config import Settings
-from chromadb.utils import embedding_functions
 from typing import List, Dict
 from utils.embedder import Embedder
 
 
-class VectorStore:
+class BaseVectorStore(ABC):
+    """向量存储抽象基类，统一接口，方便后续切换 Chroma / FAISS"""
+
+    @abstractmethod
+    def add_chunks(self, chunks: List[Dict]) -> None:
+        pass
+
+    @abstractmethod
+    def search(self, query_text: str, top_k: int = 3) -> List[Dict]:
+        pass
+
+    @abstractmethod
+    def clear(self) -> None:
+        pass
+
+
+class VectorStore(BaseVectorStore):
     def __init__(self, persist_directory: str, embedder: Embedder):
         """
         :param persist_directory: 向量数据库持久化保存文件夹路径

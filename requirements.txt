@@ -1,8 +1,12 @@
-langchain==0.3.7 
-langchain-community==0.3.5 
-langchain-text-splitters==0.3.2 
-langchain-openai==0.2.8 
-dashscope==1.22.0 
-chromadb==0.6.3 
-python-dotenv==1.1.0 
+langchain==0.3.7
+langchain-community==0.3.5
+langchain-text-splitters==0.3.2
+langchain-openai==0.2.8
+dashscope==1.22.0
+chromadb==0.6.3
+python-dotenv==1.1.0
 pypdf==5.1.0
+rank_bm25>=0.2.2
+
+# 【可选依赖】本地BGE reranker重排模型，需要本地重排再取消注释安装
+# sentence-transformers>=2.7.0

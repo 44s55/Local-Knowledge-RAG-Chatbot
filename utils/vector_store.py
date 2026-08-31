@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from chromadb.config import Settings
 from typing import List, Dict
 from utils.embedder import Embedder
-
+os.environ["CHROMA_TELEMETRY_ENABLED"] = "False"
 
 class BaseVectorStore(ABC):
     """向量存储抽象基类，统一接口，方便后续切换 Chroma / FAISS"""

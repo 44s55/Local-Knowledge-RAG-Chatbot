@@ -1,7 +1,7 @@
+from typing import List, Dict, Any
 import os
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 
-from typing import List, Dict, Any
 from sentence_transformers import CrossEncoder
 import dashscope
 from http import HTTPStatus
@@ -77,4 +77,17 @@ class DashScopeReranker:
                     "metadata": origin_doc["metadata"],
                     "rerank_score": res_item.relevance_score
                 })
+        else:
+            # API调用失败降级策略：不做重排，直接返回原始文档切片，防止RAG完全失效
+            print(f"[重排API调用失败] code:{resp.status_code}, msg:{resp.message}")
+            return docs[:top_k]
         return scored_results
+
+
+if __name__ == "__main__":
+    """自测重排模块，不发起真实网络请求"""
+    test_docs = [
+        {"page_content":"RRF用来做多路检索融合","metadata":{"source":"test1"}},
+        {"page_content":"大模型会产生幻觉问题","metadata":{"source":"test2"}}
+    ]
+    print("reranker模块加载完成")

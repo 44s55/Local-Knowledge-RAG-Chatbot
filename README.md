@@ -16,7 +16,7 @@ Local-Knowledge-RAG-Chatbot 本地知识库问答系统
 
 \- 大模型服务：通义千问系列（OpenAI 兼容接口调用）
 
-\- 开发环境：Python3.9 + Conda 虚拟环境
+\- 开发环境：Python3.10 + Conda 虚拟环境
 
 \- 代码规范：模块化解耦、全局单例复用、参数统一配置、日志优化、异常捕获
 

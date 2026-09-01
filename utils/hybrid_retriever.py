@@ -68,16 +68,26 @@ class HybridRetriever:
                 # 重排结果兜底
                 if reranked_docs is None:
                     print("[Reranker] 警告：重排返回空结果，降级使用原始检索结果")
+                    # 兜底给metadata补上rerank_score=None
+                    for d in candidates[:top_k]:
+                        d["metadata"]["rerank_score"] = None
                     return candidates[:top_k]
 
                 print(f"[Reranker] 重排完成，返回 {len(reranked_docs)} 条片段")
                 return reranked_docs
             except Exception as e:
                 print(f"[Reranker] 重排调用异常，降级跳过重排: {str(e)}")
-                return candidates[:top_k]
+                fallback_docs = candidates[:top_k]
+                # API异常降级，给每个文档补rerank_score=None，前端识别
+                for d in fallback_docs:
+                    d["metadata"]["rerank_score"] = None
+                return fallback_docs
 
-        # 不开启重排，直接截断返回
-        return candidates[:top_k]
+        # ==========新增：重排开关关闭的兜底，给metadata写入rerank_score=None，前端渲染兼容==========
+        no_rerank_docs = candidates[:top_k]
+        for d in no_rerank_docs:
+            d["metadata"]["rerank_score"] = None
+        return no_rerank_docs
 
     def build_bm25_index(self, docs: List[Dict[str, Any]]) -> None:
         """基于传入文档构建BM25索引"""

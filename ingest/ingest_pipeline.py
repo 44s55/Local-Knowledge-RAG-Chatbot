@@ -2,6 +2,10 @@ from typing import List, Dict, Any
 from pathlib import Path
 from utils.document_loader import DocumentLoader
 from utils.text_splitter import TextSplitter
+from utils.embedder import Embedder
+from utils.vector_store import VectorStore
+from utils.hybrid_retriever import HybridRetriever
+from utils.config import settings
 
 # 根据脚本位置自动推导项目根目录，git兼容，不受pycharm工作目录影响
 SCRIPT_FILE = Path(__file__).resolve()
@@ -11,10 +15,23 @@ DATA_FOLDER = PROJECT_ROOT / "data"
 
 class IngestPipeline:
     def __init__(self):
-        # 内部导入，规避循环导入
-        from utils.rag_chain import rag_chain_instance
+        # 1. 文档加载器：统一处理 txt/md/pdf 格式解析
         self.loader = DocumentLoader()
-        self.retriever = rag_chain_instance.hybrid_retriever
+        # 2. 嵌入模型：和检索端使用完全一致的嵌入器，保证向量空间对齐
+        self.embedder = Embedder()
+        # 3. 向量存储：和RAGChain同一路径，读写同一个知识库
+        self.vector_store = VectorStore(
+            persist_directory=settings.VECTOR_DB_PATH,
+            embedder=self.embedder
+        )
+        # 4. 混合检索器：用于文档入库 + 重建BM25稀疏索引
+        self.retriever = HybridRetriever(
+            vector_store=self.vector_store,
+            top_n_sparse=settings.TOP_K_BM25,
+            top_n_dense=settings.TOP_K_VECTOR,
+            final_top_k=settings.RERANK_TOP_N,
+            enable_rerank=False
+        )
 
     def load_file(self, file_path: str) -> str:
         p = Path(file_path)

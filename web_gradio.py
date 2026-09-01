@@ -57,7 +57,8 @@ except Exception:
 import gradio as gr
 import shutil
 from dotenv import load_dotenv
-
+# 【修改1】注释掉多余的reranker导入，重排已封装在HybridRetriever内部，无需外部重复实例化
+# from utils.reranker import get_reranker
 # 导入项目内部已封装模块
 from utils.rag_chain import RAGChain
 from utils.config import settings
@@ -74,10 +75,11 @@ DATA_FOLDER = PROJECT_ROOT / "data"
 
 # 初始化对话记忆，最大保存6轮对话
 memory = ConversationMemory(max_turns=6)
-# RAG主业务链路，内部已经封装retriever
+# RAG主业务链路，内部已经封装retriever + reranker
 rag_chain = RAGChain()
 # 初始化ingest流水线实例
 ingest_pipeline = IngestPipeline()
+
 
 def upload_files_to_data(files):
     """
@@ -107,54 +109,65 @@ def upload_files_to_data(files):
     return f"✅成功处理 {success_count} 个文档，已完成切片&向量入库，BM25索引已更新。"
 
 
-def chat_handle_message(user_query: str, history, top_k: int, enable_rerank: bool):
-    """
-    聊天问答回调函数，对接RAG完整业务链路
-    :param user_query: 用户输入的问题
-    :param history: gradio聊天历史
-    :param top_k: 检索返回候选片段数量
-    :param enable_rerank: 是否开启Reranker重排
-    :return: 更新后的聊天历史，溯源详情文本
-    """
-    if not user_query or user_query.strip() == "":
-        return history, "⚠️问题不能为空"
+def convert_openai_history_to_gradio(openai_msg_list):
+    """把 [{"role":"user","content":"xx"},...] 转成 gradio chatbot [[u,b],[u,b]]"""
+    gradio_history = []
+    temp_user = None
+    for msg in openai_msg_list:
+        r = msg["role"]
+        c = msg["content"]
+        if r == "user":
+            temp_user = c
+        elif r == "assistant":
+            gradio_history.append([temp_user, c])
+            temp_user = None
+    return gradio_history
 
-    # 实时同步重排开关状态到全局配置，本次问答立即生效
-    settings.RERANK_ENABLE = enable_rerank
+def chat_handle_message(user_query: str, history, top_k: int, enable_rerank: bool):
+    if not user_query or user_query.strip() == "":
+        return history, "⚠️ 问题不能为空"
 
     memory.add_user_message(user_query)
-    answer, source_docs = rag_chain.invoke(user_query, top_k=top_k)
+
+    # 调用RAG主链路
+    answer, sources = rag_chain.invoke(
+        user_query=user_query,
+        top_k=top_k,
+        enable_rerank=enable_rerank
+    )
+
     memory.add_assistant_message(answer)
 
-    source_info = "=====📑检索溯源信息=====\n"
-    if len(source_docs) == 0:
-        source_info += "本次没有检索到相关知识库片段\n"
+    # ========== 溯源详情格式化（修复字段匹配） ==========
+    source_info = ""
+    if len(sources) == 0:
+        source_info += "本次没有检索到知识库片段"
     else:
-        for idx, doc in enumerate(source_docs):
-
+        for idx, doc in enumerate(sources):
             meta = doc.get("metadata", {})
-            page_content = doc.get("content", "")
-            distance = doc.get("distance", 0.0)
 
-            source_info += f"\n【片段{idx + 1}】\n"
-            source_info += f"来源文件：{meta.get('source', '未知')}\n"
-            source_info += f"向量距离：{round(distance, 4)}\n"
-            source_info += f"重排分数：{meta.get('rerank_score', '--')}\n"
-            show_text = page_content[:400]
-            if len(page_content) > 400:
-                show_text += "……"
-            source_info += f"片段内容：{show_text}\n"
+            # 文件名：优先取metadata里的source（ingest写入的字段名）
+            filename = meta.get("source", meta.get("filename", doc.get("filename", "未知")))
 
-    history.append([user_query, answer])
-    return history, source_info
+            # 向量距离
+            distance = doc.get("distance", meta.get("distance", 0.0))
 
+            # 重排分数：优先metadata，其次根目录，都没有显示未开启
+            rr_score_raw = meta.get("rerank_score", doc.get("rerank_score", None))
+            rr_score = rr_score_raw if rr_score_raw is not None else "未开启"
+
+            # 片段正文
+            page_content = doc.get("page_content", doc.get("content", ""))
+
+            source_info += f"【片段{idx+1}】\n文件：{filename}\n距离：{distance:.4f}\n重排分数：{rr_score}\n内容：{page_content[:400]}\n------\n"
+
+    raw_history = memory.get_history()
+    gradio_chat_history = convert_openai_history_to_gradio(raw_history)
+    return gradio_chat_history, source_info
 
 def clear_chat_session():
-    """
-    清空对话会话：清空内存对话记忆，清空前端聊天记录
-    :return: 空聊天列表，重置溯源面板提示
-    """
     memory.clear()
+    # 清空后返回空列表，符合chatbot格式
     return [], "对话已清空，请发起新问题"
 
 
@@ -168,6 +181,9 @@ def handle_clear_kb():
     # 返回提示，只更新溯源面板，聊天窗口内容不动
     return "✅向量库与BM25索引已全部清空，请重新上传文档！"
 
+
+# 【修改3】删除底部重复的reranker实例化代码
+# 重排能力已由HybridRetriever内部管理，外部无需重复创建对象
 
 # ---------------------- Gradio UI页面布局定义 ----------------------
 with gr.Blocks(title="本地RAG知识库问答系统") as demo:

@@ -1,16 +1,19 @@
 """
 RAG知识库网页交互界面，基于Gradio4.x实现
 功能：
-1. 上传PDF/TXT/DOCX文档，保存到本地data目录（注：暂未自动执行向量化入库，需要后续实现data文档加载逻辑）
+1. 上传PDF/TXT/MD文档，保存到本地data目录，自动执行ingest流水线完成切片向量化持久入库
 2. 多轮对话问答，复用ConversationMemory记忆模块
-3. 展示溯源信息：来源文件、检索片段
+3. 展示溯源信息：来源文件、向量距离、重排分数、检索片段
 4. 支持参数调节：检索top_k
 5. 支持清空对话会话
+6. 新增：清空全部知识库按钮
 """
 import os
 # 关闭gradio遥测，减少无关报错
 os.environ["GRADIO_ANALYTICS_ENABLED"] = "0"
 os.environ["GRADIO_API_DOCS"] = "0"
+from pathlib import Path
+from ingest.ingest_pipeline import IngestPipeline
 
 # 猴子补丁，捕获异常防止模块缺失崩溃
 try:
@@ -46,33 +49,44 @@ from utils.conversation_memory import ConversationMemory
 load_dotenv()
 
 # ---------------------- 全局单例对象 ----------------------
-# data知识库目录
-DATA_FOLDER = "./data"
+# 和ingest_pipeline完全统一：自动推导项目根目录，杜绝相对路径bug
+SCRIPT_FILE = Path(__file__).resolve()
+PROJECT_ROOT = SCRIPT_FILE.parent
+DATA_FOLDER = PROJECT_ROOT / "data"
+
 # 初始化对话记忆，最大保存6轮对话
 memory = ConversationMemory(max_turns=6)
 # RAG主业务链路，内部已经封装retriever
 rag_chain = RAGChain()
-
+# 初始化ingest流水线实例
+ingest_pipeline = IngestPipeline()
 
 def upload_files_to_data(files):
     """
     gradio上传文件回调函数
-    将网页上传的文件拷贝到项目data目录
-    注意：当前ingest.py仅内置测试文本，**不会自动对data目录文件做切分向量化入库**，入库逻辑待实现
+    将网页上传的文件拷贝到项目data目录，自动调用ingest流水线完成切片、向量化、持久入库
     :param files: gradio上传得到的文件列表
     :return: str，返回处理结果提示文本
     """
     if not files:
-        return "⚠️未检测到上传文件，请选择PDF/TXT/DOCX文档"
+        return "⚠️未检测到上传文件，请选择PDF/TXT/MD文档"
 
     os.makedirs(DATA_FOLDER, exist_ok=True)
-
+    success_count = 0
     for file in files:
-        filename = os.path.basename(file.orig_name)
-        target_path = os.path.join(DATA_FOLDER, filename)
+        filename = os.path.basename(file.name)
+        suffix = Path(filename).suffix.lower()
+        # 过滤不支持后缀
+        if suffix not in (".txt", ".pdf", ".md"):
+            continue
+        target_path = str(DATA_FOLDER / filename)
         shutil.copy(file, target_path)
-
-    return f"✅成功保存 {len(files)} 个文件到./data目录。提示：尚未执行文档向量化入库，请补充data目录加载逻辑。"
+        # 单文件执行流水线处理：切片+向量化+入库
+        ingest_pipeline.process_file(target_path)
+        success_count += 1
+    # 全部上传完成后重建BM25索引
+    ingest_pipeline.retriever.rebuild_bm25()
+    return f"✅成功处理 {success_count} 个文档，已完成切片&向量入库，BM25索引已更新。"
 
 
 def chat_handle_message(user_query: str, history, top_k: int):
@@ -95,17 +109,19 @@ def chat_handle_message(user_query: str, history, top_k: int):
         source_info += "本次没有检索到相关知识库片段\n"
     else:
         for idx, doc in enumerate(source_docs):
-            source_info += f"\n【片段{idx+1}】\n"
-            if isinstance(doc, dict):
-                meta = doc.get("metadata", {})
-                page_content = doc.get("content", "")
-            else:
-                meta = getattr(doc, "metadata", {})
-                page_content = getattr(doc, "page_content", "")
 
+            meta = doc.get("metadata", {})
+            page_content = doc.get("content", "")
+            distance = doc.get("distance", 0.0)
+
+            source_info += f"\n【片段{idx + 1}】\n"
             source_info += f"来源文件：{meta.get('source', '未知')}\n"
+            source_info += f"向量距离：{round(distance, 4)}\n"
             source_info += f"重排分数：{meta.get('rerank_score', '--')}\n"
-            source_info += f"片段内容：{page_content[:350]}...\n"
+            show_text = page_content[:400]
+            if len(page_content) > 400:
+                show_text += "……"
+            source_info += f"片段内容：{show_text}\n"
 
     history.append([user_query, answer])
     return history, source_info
@@ -120,6 +136,17 @@ def clear_chat_session():
     return [], "对话已清空，请发起新问题"
 
 
+def handle_clear_kb():
+    """
+    清空全部知识库：清空向量库集合、清空BM25索引，**保留聊天会话记录**
+    :return: 字符串提示，输出到溯源详情文本框
+    """
+    rag_chain.vector_store.clear()
+    rag_chain.hybrid_retriever.clear_bm25()
+    # 返回提示，只更新溯源面板，聊天窗口内容不动
+    return "✅向量库与BM25索引已全部清空，请重新上传文档！"
+
+
 # ---------------------- Gradio UI页面布局定义 ----------------------
 with gr.Blocks(title="本地RAG知识库问答系统") as demo:
     gr.Markdown("# 📚 Local‑Knowledge‑RAG‑Chatbot 网页问答端")
@@ -128,8 +155,8 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
         # 左侧面板：上传、参数、操作按钮
         with gr.Column(scale=1):
             gr.Markdown("## 📂文档上传")
-            upload_file_input = gr.File(label="上传知识库文档", file_types=[".pdf", ".txt", ".docx"], file_count="multiple")
-            upload_run_btn = gr.Button("💾保存文件到data目录")
+            upload_file_input = gr.File(label="上传知识库文档", file_types=[".pdf", ".txt", ".md"], file_count="multiple")
+            upload_run_btn = gr.Button("💾保存文件到data目录并入库")
             upload_status_text = gr.Textbox(label="上传状态", interactive=False)
 
             gr.Markdown("## ⚙️检索参数")
@@ -137,6 +164,7 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
 
             gr.Markdown("## 🧹操作")
             clear_chat_btn = gr.Button("清空对话会话")
+            btn_clear_kb = gr.Button("⚠️清空全部知识库", variant="stop")
 
         # 右侧面板：聊天窗口 + 溯源详情
         with gr.Column(scale=2):
@@ -161,6 +189,12 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
         fn=clear_chat_session,
         inputs=[],
         outputs=[chatbot_ui, source_detail_box]
+    )
+
+    btn_clear_kb.click(
+        fn=handle_clear_kb,
+        inputs=[],
+        outputs=[source_detail_box]
     )
 
 if __name__ == "__main__":

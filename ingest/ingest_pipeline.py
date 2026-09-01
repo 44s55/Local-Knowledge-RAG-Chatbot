@@ -20,26 +20,18 @@ class IngestPipeline:
         p = Path(file_path)
         if not p.exists():
             raise FileNotFoundError(f"文件不存在: {file_path}")
-        suffix = p.suffix.lower()
-        if suffix == ".pdf":
-            return self.loader.load_pdf(str(p))
-        else:
-            return self.loader.load_txt(str(p))
+        # 使用DocumentLoader统一入口，自动适配 txt/md/pdf
+        return self.loader.load_file(str(p))
 
     def process_file(self, file_path: str) -> None:
         raw_text = self.load_file(file_path)
-        # =========新增调试打印=========
-        print(f"====原始读取文本长度：{len(raw_text)}====")
-        print(f"raw_text[:200] --> {repr(raw_text[:200])}")
-        # =============================
+
+        # 空文档直接跳过，不执行切片入库
+        if not raw_text or len(raw_text.strip()) == 0:
+            print(f"[process_file] ⚠️ {Path(file_path).name} 内容为空，跳过")
+            return
+
         chunks = TextSplitter.split(raw_text)
-
-        # =========新增打印切片结果=========
-        print(f"切片得到块数量：{len(chunks)}")
-        for idx, c in enumerate(chunks):
-            print(f"chunk[{idx}] len={len(c)} repr={repr(c)}")
-        # =================================
-
         docs: List[Dict[str, Any]] = []
         for chunk in chunks:
             docs.append({
@@ -51,11 +43,11 @@ class IngestPipeline:
 
     def process_dir(self, dir_path: str) -> None:
         p = Path(dir_path)
-        print(f"正在扫描目录：{p.resolve()}")  # 打印真实绝对路径
-        all_files = list(p.glob("**/*"))
-        print(f"目录下全部文件数量：{len(all_files)}")
+        print(f"正在扫描目录：{p.resolve()}")
+        # 支持 txt / pdf / md 三种后缀
+        support_suffix = (".txt", ".pdf", ".md")
         for f in p.glob("**/*"):
-            if f.suffix.lower() in (".txt", ".pdf"):
+            if f.suffix.lower() in support_suffix:
                 print(f"✅识别到文档: {f.name}")
                 self.process_file(str(f))
         self.retriever.rebuild_bm25()
@@ -64,5 +56,4 @@ class IngestPipeline:
 
 if __name__ == "__main__":
     pipeline = IngestPipeline()
-    # 使用自动算出的项目根目录下data，不再写死"./data"
     pipeline.process_dir(str(DATA_FOLDER))

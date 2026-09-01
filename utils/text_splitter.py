@@ -15,3 +15,12 @@ class TextSplitter:
         )
         chunks = splitter.split_text(text)
         return chunks
+
+    @staticmethod
+    def split(text: str) -> List[str]:
+        """使用全局Settings配置，业务层统一入口，不用传参"""
+        return TextSplitter.split_text(
+            text,
+            chunk_size=settings.CHUNK_SIZE,
+            chunk_overlap=settings.CHUNK_OVERLAP
+        )

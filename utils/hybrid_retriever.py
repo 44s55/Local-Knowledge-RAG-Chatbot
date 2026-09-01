@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 import numpy as np
 from rank_bm25 import BM25Okapi
 from utils.vector_store import BaseVectorStore
-from utils.reranker import DashScopeReranker
+#from utils.reranker import DashScopeReranker
 
 
 class HybridRetriever:
@@ -10,6 +10,7 @@ class HybridRetriever:
     混合检索器：BM25稀疏关键词检索 + 向量稠密检索 + RRF倒数排名融合
     支持开关控制是否开启重排
     """
+
     def __init__(
         self,
         vector_store: BaseVectorStore,
@@ -33,14 +34,28 @@ class HybridRetriever:
         tokenized_corpus = [doc["content"].split() for doc in docs]
         self.bm25 = BM25Okapi(tokenized_corpus)
 
+    def clear_bm25(self):
+        """清空内存中的BM25索引与文档列表"""
+        self.bm25 = None
+        self.corpus_docs = []
+        print("[HybridRetriever] BM25索引已全部清空")
+
     def _bm25_retrieve(self, query: str) -> List[Dict[str, Any]]:
-        """BM25稀疏检索"""
+        """BM25稀疏检索，返回标准字典列表，和向量检索格式对齐"""
         if self.bm25 is None:
             return []
         tokenized_query = query.split()
         scores = self.bm25.get_scores(tokenized_query)
         top_idx = np.argsort(scores)[::-1][:self.top_n_sparse]
-        return [self.corpus_docs[i] for i in top_idx]
+        result_list = []
+        for i in top_idx:
+            doc_item = self.corpus_docs[i]
+            result_list.append({
+                "content": doc_item["content"],
+                "metadata": doc_item["metadata"],
+                "distance": 0.0  # BM25无向量距离，占位
+            })
+        return result_list
 
     def _dense_retrieve(self, query: str) -> List[Dict[str, Any]]:
         """向量稠密检索"""
@@ -70,24 +85,72 @@ class HybridRetriever:
         return [doc_mapping[did] for did in sorted_ids]
 
     def retrieve(self, query: str) -> List[Dict[str, Any]]:
-        """对外统一检索入口"""
+        """对外统一检索入口，全部返回字典对象，无裸字符串"""
         sparse_res = self._bm25_retrieve(query)
         dense_res = self._dense_retrieve(query)
 
         fused_docs = self._rrf_fuse([sparse_res, dense_res])
         fused_docs = fused_docs[: self.final_top_k * 2]
 
-        if self.enable_rerank and len(fused_docs) > 0:
-            # 适配reranker：把content临时映射成page_content，调用完再还原
-            for d in fused_docs:
-                d["page_content"] = d["content"]
-            reranker = DashScopeReranker()
-            rerank_out = reranker.rerank(query, fused_docs, top_k=self.final_top_k)
-            for d in rerank_out:
-                del d["page_content"]
-            return rerank_out
-        else:
-            return fused_docs[: self.final_top_k]
+        # 暂时关闭重排逻辑，后续版本再启用
+        # if self.enable_rerank and len(fused_docs) > 0:
+        #     for d in fused_docs:
+        #         d["page_content"] = d["content"]
+        #     reranker = DashScopeReranker()
+        #     rerank_out = reranker.rerank(query, fused_docs, top_k=self.final_top_k)
+        #     for d in rerank_out:
+        #         del d["page_content"]
+        #     return rerank_out
+        # else:
+        return fused_docs[: self.final_top_k]
+
+    def get_context(self, query: str, top_k: int = 5):
+        """
+        适配RAGChain调用，拼接上下文
+        :param query: 用户问题
+        :param top_k: 返回文档数量
+        :return: 拼接后的上下文字符串, 完整文档字典列表 [{"content":"","metadata":{},"distance":0.0}, ...]
+        """
+        doc_list = self.retrieve(query)
+        # 按传入top_k截断
+        doc_list = doc_list[:top_k]
+        context_parts = [doc["content"] for doc in doc_list]
+        return "\n".join(context_parts), doc_list
+
+    def add_documents(self, docs: List[Dict[str, Any]]) -> None:
+        """
+        【对外接口】新增一批文档，写入向量库；
+        注意：只写入向量库！！不会自动刷新BM25，需要手动调用rebuild_bm25()
+        :param docs: [{"content":"xxx", "metadata":{}}]格式的文档块列表
+        """
+        self.vector_store.add_chunks(docs)
+
+    def rebuild_bm25(self) -> None:
+        """
+        【对外接口】重建内存BM25索引
+        从底层向量库读取全部已存储文档，重新构建BM25Okapi内存索引
+        ⚠️因为BM25是内存实例，磁盘向量库新增数据不会自动同步到BM25；
+        每次ingest入库完成之后，必须调用这个函数，否则BM25检索不到新入库文档
+        """
+        # 调用chroma原生get接口读取全部数据，不走向量检索，不会调用embedder
+        coll = self.vector_store.collection
+        res = coll.get(include=["documents", "metadatas"])
+
+        doc_texts = res["documents"]
+        doc_metas = res["metadatas"]
+
+        all_docs: List[Dict[str, Any]] = []
+        for text, meta in zip(doc_texts, doc_metas):
+            if text is not None:
+                all_docs.append({"content": text, "metadata": meta if meta is not None else {}})
+
+        if len(all_docs) == 0:
+            self.bm25 = None
+            self.corpus_docs = []
+            print("[rebuild_bm25]向量库为空，清空BM25索引")
+            return
+        self.build_bm25_index(all_docs)
+        print(f"[rebuild_bm25]成功重建BM25索引，加载文档数量：{len(self.corpus_docs)}")
 
 
 if __name__ == "__main__":

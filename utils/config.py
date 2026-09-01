@@ -32,6 +32,8 @@ class Settings:
     TOP_K_VECTOR: int = int(os.getenv("TOP_K_VECTOR"))
     TOP_K_BM25: int = int(os.getenv("TOP_K_BM25"))
     RERANK_TOP_N: int = int(os.getenv("RERANK_TOP_N"))
+    # RAG幻觉防护：向量距离阈值，大于该值代表知识库相关性很低，拒绝回答
+    RAG_DISTANCE_THRESHOLD: float = 1.2
 
     # ========== 文本切分Chunk参数 ==========
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE"))

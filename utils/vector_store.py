@@ -3,19 +3,22 @@ import os
 import chromadb
 from abc import ABC, abstractmethod
 from chromadb.config import Settings
-from typing import List, Dict
+from typing import List, Dict, Any
 from utils.embedder import Embedder
+
+# 关闭chroma遥测，消除控制台telemetry报错
 os.environ["CHROMA_TELEMETRY_ENABLED"] = "False"
+
 
 class BaseVectorStore(ABC):
     """向量存储抽象基类，统一接口，方便后续切换 Chroma / FAISS"""
 
     @abstractmethod
-    def add_chunks(self, chunks: List[Dict]) -> None:
+    def add_chunks(self, chunks: List[Dict[str, Any]]) -> None:
         pass
 
     @abstractmethod
-    def search(self, query_text: str, top_k: int = 3) -> List[Dict]:
+    def search(self, query_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
         pass
 
     @abstractmethod
@@ -49,13 +52,22 @@ class VectorStore(BaseVectorStore):
             name=self.collection_name
         )
 
-    def add_chunks(self, chunks: List[Dict]):
+    def add_chunks(self, chunks: List[Dict[str, Any]]):
         """
         将切片后的文档块入库
         chunks格式示例：[{"content":"xxx","metadata":{"source":"xxx"}}]
         """
-        # 先调用embedder批量生成embedding，拿到处理后的新chunk列表（带有embedding字段）
-        processed_chunks = self.embedder.embed_chunks(chunks)
+        if not chunks:
+            return
+
+        import hashlib
+        batch_size = self.embedder.batch_max_size
+        processed_chunks = []
+        # 分批embedding，规避单次embedding数量上限
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i:i + batch_size]
+            batch_result = self.embedder.embed_chunks(batch)
+            processed_chunks.extend(batch_result)
 
         ids = []
         documents = []
@@ -63,7 +75,11 @@ class VectorStore(BaseVectorStore):
         metadatas = []
 
         for idx, item in enumerate(processed_chunks):
-            doc_id = f"doc_{idx}"
+            # 使用文件名哈希 + 切片序号生成全局唯一ID，避免重复上传ID冲突
+            src_name = item.get("metadata", {}).get("source", "unknown")
+            hash_digest = hashlib.md5(src_name.encode("utf-8")).hexdigest()
+            doc_id = f"{hash_digest}_{idx}"
+
             ids.append(doc_id)
             documents.append(item["content"])
             embeddings.append(item["embedding"])
@@ -77,8 +93,12 @@ class VectorStore(BaseVectorStore):
         )
         print(f"[VectorStore.add_chunks] 成功入库 {len(processed_chunks)} 条切片")
 
-    def search(self, query_text: str, top_k: int = 3) -> List[Dict]:
-        """根据用户问题检索知识库"""
+    def search(self, query_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
+        """
+        根据用户问题检索知识库
+        返回格式：[{"content":"文本","metadata":dict,"distance":float}, ...]
+        保证metadata永远是字典对象，不会返回None，防止 .get() 调用报错
+        """
         query_embedding = self.embedder.embed_text(query_text)
         result = self.collection.query(
             query_embeddings=[query_embedding],
@@ -86,12 +106,18 @@ class VectorStore(BaseVectorStore):
         )
 
         output = []
-        # 解析检索结果
-        for i in range(len(result["documents"][0])):
+        doc_list = result["documents"][0]
+        dist_list = result["distances"][0]
+        meta_list = result["metadatas"][0]
+
+        for i in range(len(doc_list)):
+            raw_meta = meta_list[i]
+            # 核心修复：chroma部分版本会返回metadata=None，强制转为空字典
+            safe_meta = raw_meta if raw_meta is not None else {}
             output.append({
-                "content": result["documents"][0][i],
-                "distance": result["distances"][0][i],
-                "metadata": result["metadatas"][0][i]
+                "content": doc_list[i],
+                "distance": dist_list[i],
+                "metadata": safe_meta
             })
         return output
 

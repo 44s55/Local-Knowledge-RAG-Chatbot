@@ -55,13 +55,14 @@ class SimpleLightAgent:
             # 异常兜底：默认走知识库检索，保证服务可用
             return {"tool": "knowledge_search", "thought": "决策异常，默认使用知识库检索"}
 
-    def run(self, user_query: str, top_k: int = 4, enable_rerank: bool = False):
+    def run(self, user_query: str, top_k: int = 4, enable_rerank: bool = False, conversation_history: list = None):
         """
         Agent对外主入口：完整执行一次问答
         :param user_query: 用户问题
         :param top_k: 检索片段数量
         :param enable_rerank: 是否开启重排
-        :return: (回答文本, 溯源片段列表)
+        :param conversation_history: 历史对话列表
+        :return: (回答文本, 溯源片段列表, 决策信息字典)
         """
         # Step1：意图决策
         decision = self._plan(user_query)
@@ -71,21 +72,25 @@ class SimpleLightAgent:
 
         sources = []
         if tool == "knowledge_search":
-            # Step2-A：调用现有完整RAG链路
+            # Step2-A：调用RAG，传入历史对话
             answer, sources = self.rag_chain.invoke(
                 user_query=user_query,
                 top_k=top_k,
-                enable_rerank=enable_rerank
+                enable_rerank=enable_rerank,
+                conversation_history=conversation_history
             )
         elif tool == "no_tool":
-            # Step2-B：不调用知识库，直接大模型回答
+            # Step2-B：闲聊也传入历史，支持连续闲聊
             try:
+                messages = []
+                if conversation_history:
+                    messages.extend(conversation_history)
+                messages.append({"role": "user", "content": user_query})
+                messages.insert(0, {"role": "system", "content": "请简洁、友好地回答用户问题"})
+
                 resp = self.client.chat.completions.create(
                     model=settings.LLM_MODEL_NAME,
-                    messages=[
-                        {"role": "system", "content": "请简洁、友好地回答用户问题"},
-                        {"role": "user", "content": user_query}
-                    ],
+                    messages=messages,
                     temperature=0.3,
                     stream=False
                 )
@@ -95,4 +100,4 @@ class SimpleLightAgent:
         else:
             answer = "无法识别指令，请针对上传文档提问或进行简单交流。"
 
-        return answer, sources
+        return answer, sources, decision

@@ -10,6 +10,9 @@ RAG知识库网页交互界面，基于Gradio4.x实现
 7. 新增：Reranker重排开关，每次提问实时生效
 """
 import os
+
+import query
+
 # 全局关闭所有遥测开关
 os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
 os.environ["ANONYMIZED_TELEMETRY"] = "false"
@@ -63,6 +66,7 @@ from dotenv import load_dotenv
 from utils.rag_chain import RAGChain
 from utils.config import settings
 from utils.conversation_memory import ConversationMemory
+from utils.simple_agent import SimpleLightAgent
 
 # 加载.env环境变量
 load_dotenv()
@@ -77,6 +81,9 @@ DATA_FOLDER = PROJECT_ROOT / "data"
 memory = ConversationMemory(max_turns=6)
 # RAG主业务链路，内部已经封装retriever + reranker
 rag_chain = RAGChain()
+agent = SimpleLightAgent(rag_chain=rag_chain)  # 新增这一行
+ingest_pipeline = IngestPipeline()
+
 # 初始化ingest流水线实例
 ingest_pipeline = IngestPipeline()
 
@@ -123,20 +130,36 @@ def convert_openai_history_to_gradio(openai_msg_list):
             temp_user = None
     return gradio_history
 
-def chat_handle_message(user_query: str, history, top_k: int, enable_rerank: bool):
-    if not user_query or user_query.strip() == "":
-        return history, "⚠️ 问题不能为空"
+def chat_handle_message(user_message, chat_history, top_k_slider, rerank_switch):
+    # 形参统一转内部变量，和 agent 接口对应
+    user_query = user_message
+    top_k = int(top_k_slider)
+    enable_rerank = rerank_switch
 
-    memory.add_user_message(user_query)
-
-    # 调用RAG主链路
-    answer, sources = rag_chain.invoke(
+    # 调用 Agent 执行完整问答
+    answer, sources = agent.run(
         user_query=user_query,
         top_k=top_k,
         enable_rerank=enable_rerank
     )
 
-    memory.add_assistant_message(answer)
+    # 追加到对话历史，解决「未使用形参 chat_history」警告
+    chat_history.append((user_message, answer))
+
+    # 格式化溯源信息输出
+    source_text = ""
+    for idx, doc in enumerate(sources):
+        metadata = doc.get("metadata", {})
+        source_text += f"【片段{idx+1}】\n"
+        source_text += f"文件：{metadata.get('source', '未知')}\n"
+        distance = metadata.get('distance', 'N/A')
+        source_text += f"距离：{distance:.4f}\n" if isinstance(distance, float) else f"距离：{distance}\n"
+        rerank_score = metadata.get('rerank_score')
+        source_text += f"重排分数：{rerank_score if rerank_score is not None else '未开启'}\n"
+        source_text += f"内容：{doc.get('content', '')[:120]}...\n\n"
+
+    return chat_history, source_text
+
 
     # ========== 溯源详情格式化（修复字段匹配） ==========
     source_info = ""

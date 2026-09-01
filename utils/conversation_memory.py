@@ -13,6 +13,10 @@ class ConversationMemory:
         self.max_turns = max_turns
         self.history: List[Dict[str, str]] = []
 
+    def clear(self) -> None:
+        """清空全部对话历史记录"""
+        self.history.clear()
+
     def add_user_message(self, content: str) -> None:
         """新增用户消息"""
         self.history.append({"role": "user", "content": content})

@@ -7,11 +7,29 @@ RAG知识库网页交互界面，基于Gradio4.x实现
 4. 支持参数调节：检索top_k
 5. 支持清空对话会话
 6. 新增：清空全部知识库按钮
+7. 新增：Reranker重排开关，每次提问实时生效
 """
 import os
-# 关闭gradio遥测，减少无关报错
+# 全局关闭所有遥测开关
+os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
+os.environ["ANONYMIZED_TELEMETRY"] = "false"
 os.environ["GRADIO_ANALYTICS_ENABLED"] = "0"
 os.environ["GRADIO_API_DOCS"] = "0"
+
+# 提前导入chroma并强制拦截遥测捕获函数，彻底消除参数报错
+import chromadb
+try:
+    # 直接替换遥测核心捕获函数，无视参数数量，直接返回空
+    import chromadb.telemetry.events
+    chromadb.telemetry.events.capture = lambda *args, **kwargs: None
+except Exception:
+    try:
+        # 兼容其他版本的模块路径
+        import chromadb.telemetry
+        chromadb.telemetry.capture = lambda *args, **kwargs: None
+    except Exception:
+        pass
+
 from pathlib import Path
 from ingest.ingest_pipeline import IngestPipeline
 
@@ -89,16 +107,20 @@ def upload_files_to_data(files):
     return f"✅成功处理 {success_count} 个文档，已完成切片&向量入库，BM25索引已更新。"
 
 
-def chat_handle_message(user_query: str, history, top_k: int):
+def chat_handle_message(user_query: str, history, top_k: int, enable_rerank: bool):
     """
     聊天问答回调函数，对接RAG完整业务链路
     :param user_query: 用户输入的问题
     :param history: gradio聊天历史
     :param top_k: 检索返回候选片段数量
+    :param enable_rerank: 是否开启Reranker重排
     :return: 更新后的聊天历史，溯源详情文本
     """
     if not user_query or user_query.strip() == "":
         return history, "⚠️问题不能为空"
+
+    # 实时同步重排开关状态到全局配置，本次问答立即生效
+    settings.RERANK_ENABLE = enable_rerank
 
     memory.add_user_message(user_query)
     answer, source_docs = rag_chain.invoke(user_query, top_k=top_k)
@@ -161,6 +183,12 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
 
             gr.Markdown("## ⚙️检索参数")
             top_k_slider = gr.Slider(minimum=2, maximum=10, value=4, step=1, label="Top‑K 检索片段数")
+            # 新增：Reranker重排开关
+            rerank_checkbox = gr.Checkbox(
+                label="开启Reranker重排",
+                value=False,
+                info="开启后对召回片段做精排，提升答案匹配度"
+            )
 
             gr.Markdown("## 🧹操作")
             clear_chat_btn = gr.Button("清空对话会话")
@@ -181,7 +209,7 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
 
     user_input_box.submit(
         fn=chat_handle_message,
-        inputs=[user_input_box, chatbot_ui, top_k_slider],
+        inputs=[user_input_box, chatbot_ui, top_k_slider, rerank_checkbox],
         outputs=[chatbot_ui, source_detail_box]
     )
 

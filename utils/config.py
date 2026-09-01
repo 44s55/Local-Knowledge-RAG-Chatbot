@@ -39,6 +39,12 @@ class Settings:
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE"))
     CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP"))
 
+    # ========== Reranker重排模块配置 ==========
+    RERANK_ENABLE: bool = False          # 是否开启重排，默认关闭
+    RERANK_USE_CLOUD: bool = True        # True阿里云云端重排；False本地BGE重排
+    RERANK_TOP_K: int = 4               # 重排之后保留多少个片段
+    RERANK_THRESHOLD: float = 0.1        # 重排分数阈值，低于该分数直接丢弃片段
+
 
 # 全局单例对象，别的文件导入： from utils.config import settings
 settings = Settings()

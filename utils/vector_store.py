@@ -1,5 +1,8 @@
 # utils/vector_store.py
 import os
+# 关闭Chroma遥测上报，消除控制台冗余报错
+os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
+
 import chromadb
 from abc import ABC, abstractmethod
 from chromadb.config import Settings

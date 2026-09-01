@@ -52,14 +52,17 @@ class VectorStore(BaseVectorStore):
     def add_chunks(self, chunks: List[Dict]):
         """
         将切片后的文档块入库
-        chunks格式示例：[{"content":"xxx","embedding":[...], "metadata":{"source":"xxx"}}]
+        chunks格式示例：[{"content":"xxx","metadata":{"source":"xxx"}}]
         """
+        # 先调用embedder批量生成embedding，拿到处理后的新chunk列表（带有embedding字段）
+        processed_chunks = self.embedder.embed_chunks(chunks)
+
         ids = []
         documents = []
         embeddings = []
         metadatas = []
 
-        for idx, item in enumerate(chunks):
+        for idx, item in enumerate(processed_chunks):
             doc_id = f"doc_{idx}"
             ids.append(doc_id)
             documents.append(item["content"])
@@ -72,6 +75,7 @@ class VectorStore(BaseVectorStore):
             embeddings=embeddings,
             metadatas=metadatas
         )
+        print(f"[VectorStore.add_chunks] 成功入库 {len(processed_chunks)} 条切片")
 
     def search(self, query_text: str, top_k: int = 3) -> List[Dict]:
         """根据用户问题检索知识库"""
@@ -95,3 +99,7 @@ class VectorStore(BaseVectorStore):
         """清空当前知识库集合"""
         self.client.delete_collection(name=self.collection_name)
         self.collection = self.client.get_or_create_collection(name=self.collection_name)
+
+
+class ChromaVectorStore:
+    pass

@@ -2,7 +2,7 @@
 from typing import List, Dict
 from utils.embedder import Embedder
 from utils.vector_store import VectorStore
-from utils.config import settings
+from config.settings import settings
 
 
 class Retriever:

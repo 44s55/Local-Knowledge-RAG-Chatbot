@@ -1,5 +1,5 @@
 # test_settings.py
-from utils.config import settings
+from config.settings import settings
 
 print(f"重排开关 RERANK_ENABLE = {settings.RERANK_ENABLE}")
 print(f"是否使用云端重排 RERANK_USE_CLOUD = {settings.RERANK_USE_CLOUD}")

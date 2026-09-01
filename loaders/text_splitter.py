@@ -1,6 +1,6 @@
 from typing import List, Optional
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from utils.config import settings
+from config.settings import settings
 
 
 class TextSplitter:

@@ -1,7 +1,7 @@
 # utils/text_splitter.py
 from typing import List
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from utils.config import settings
+from config.settings import settings
 
 
 class TextSplitter:

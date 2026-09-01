@@ -1,6 +1,6 @@
 import json
 from openai import OpenAI
-from utils.config import settings
+from config.settings import settings
 from utils.rag_chain import RAGChain
 
 

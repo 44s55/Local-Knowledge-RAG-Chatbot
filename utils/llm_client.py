@@ -1,6 +1,6 @@
 # run_llm.py
 from openai import OpenAI
-from utils.config import LLM_API_KEY, LLM_API_BASE, LLM_MODEL
+from utils.settings import LLM_API_KEY, LLM_API_BASE, LLM_MODEL
 
 def chat_with_llm(messages: list, temperature: float = 0.3) -> str:
     """调用大模型对话"""

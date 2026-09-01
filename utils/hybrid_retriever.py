@@ -3,7 +3,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 from utils.vector_store import BaseVectorStore
 from utils.reranker import Reranker
-from utils.config import settings
+from config.settings import settings
 
 
 class HybridRetriever:

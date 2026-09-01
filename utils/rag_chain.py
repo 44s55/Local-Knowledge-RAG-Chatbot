@@ -1,5 +1,5 @@
 from openai import OpenAI
-from utils.config import settings
+from config.settings import settings
 from utils.vector_store import VectorStore
 from utils.hybrid_retriever import HybridRetriever
 from utils.embedder import Embedder

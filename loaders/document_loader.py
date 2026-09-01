@@ -75,7 +75,7 @@ def load_documents_from_dir(dir_path: str) -> list[tuple[str, str]]:
 
 if __name__ == "__main__":
     # 本地测试入口：测试读取data文件夹下面全部文档
-    from utils.config import settings
+    from config.settings import settings
     data_dir = "./data"
     docs = load_documents_from_dir(data_dir)
     print(f"一共读取到 {len(docs)} 个文档")

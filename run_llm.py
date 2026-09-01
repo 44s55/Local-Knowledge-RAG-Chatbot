@@ -1,6 +1,6 @@
 # run_llm.py
 from openai import OpenAI
-from utils.config import settings
+from config.settings import settings
 
 def chat_with_llm(messages: list, temperature: float = 0.3) -> str:
     """调用大模型对话，复用项目原有Settings配置"""

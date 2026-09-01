@@ -1,7 +1,7 @@
 # utils/reranker.py
 import os
 import requests
-from utils.config import settings
+from config.settings import settings
 
 
 class Reranker:

@@ -8,14 +8,12 @@ from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Dict
-import os
 import tempfile
 from pathlib import Path
 
 from config.settings import settings
 from config.logger import logger
 from utils.exceptions import FileNotSupportError, KnowledgeBaseEmptyError, LLMRequestError
-
 from ingest.ingest_pipeline import IngestPipeline
 from utils.simple_agent import SimpleLightAgent
 from utils.rag_chain import RAGChain
@@ -34,6 +32,10 @@ class ChatRequest(BaseModel):
     history: List[Dict] = []
     top_k: int = 4
     enable_rerank: bool = False
+    # ===== 新增：检索优化开关（和前端payload字段一一对应）=====
+    enable_query_rewrite: bool = False   # 查询改写
+    enable_multi_query: bool = False     # 多查询扩展
+    enable_compression: bool = False     # 上下文压缩
 
 
 # ===================== 全局异常处理器（兜底） =====================
@@ -45,6 +47,7 @@ async def file_not_support_handler(request: Request, exc: FileNotSupportError):
         content={"code": 400, "msg": str(exc), "data": None}
     )
 
+
 @app.exception_handler(KnowledgeBaseEmptyError)
 async def knowledge_empty_handler(request: Request, exc: KnowledgeBaseEmptyError):
     logger.warning(f"知识库为空: {str(exc)}")
@@ -53,6 +56,7 @@ async def knowledge_empty_handler(request: Request, exc: KnowledgeBaseEmptyError
         content={"code": 400, "msg": str(exc), "data": None}
     )
 
+
 @app.exception_handler(LLMRequestError)
 async def llm_request_handler(request: Request, exc: LLMRequestError):
     logger.error(f"大模型调用失败: {str(exc)}", exc_info=True)
@@ -60,6 +64,7 @@ async def llm_request_handler(request: Request, exc: LLMRequestError):
         status_code=200,
         content={"code": 500, "msg": "大模型服务调用失败，请稍后重试", "data": None}
     )
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -119,7 +124,11 @@ async def chat(req: ChatRequest):
             user_query=req.question,
             top_k=req.top_k,
             enable_rerank=req.enable_rerank,
-            conversation_history=req.history
+            conversation_history=req.history,
+            # ===== 新增：传递三个优化开关 =====
+            enable_query_rewrite=req.enable_query_rewrite,
+            enable_multi_query=req.enable_multi_query,
+            enable_compression=req.enable_compression
         )
 
         return {
@@ -153,7 +162,11 @@ async def chat_stream(req: ChatRequest):
             user_query=req.question,
             top_k=req.top_k,
             enable_rerank=req.enable_rerank,
-            conversation_history=req.history
+            conversation_history=req.history,
+            # ===== 新增：传递三个优化开关 =====
+            enable_query_rewrite=req.enable_query_rewrite,
+            enable_multi_query=req.enable_multi_query,
+            enable_compression=req.enable_compression
         )
 
         # 2. 流式生成器
@@ -169,6 +182,7 @@ async def chat_stream(req: ChatRequest):
                         conversation_history=req.history
                 ):
                     yield f"data: {json.dumps({'type': 'text', 'content': text_chunk}, ensure_ascii=False)}\n\n"
+
             elif decision.get("tool") == "no_tool":
                 # 闲聊场景也走流式
                 for text_chunk in rag_chain.stream_chat(
@@ -177,6 +191,7 @@ async def chat_stream(req: ChatRequest):
                         conversation_history=req.history
                 ):
                     yield f"data: {json.dumps({'type': 'text', 'content': text_chunk}, ensure_ascii=False)}\n\n"
+
             else:
                 yield f"data: {json.dumps({'type': 'text', 'content': '知识库中未查询到相关内容'}, ensure_ascii=False)}\n\n"
 

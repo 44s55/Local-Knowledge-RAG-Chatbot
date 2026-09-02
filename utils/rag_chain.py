@@ -4,6 +4,8 @@ from utils.vector_store import VectorStore
 from utils.hybrid_retriever import HybridRetriever
 from utils.embedder import Embedder
 from config.logger import logger
+from utils.query_optimizer import QueryOptimizer
+from utils.context_compressor import ContextCompressor
 
 
 class RAGChain:
@@ -19,6 +21,10 @@ class RAGChain:
             persist_directory=settings.VECTOR_DB_PATH,
             embedder=self.embedder
         )
+        # 查询优化器
+        self.query_optimizer = QueryOptimizer()
+        # 上下文压缩器
+        self.context_compressor = ContextCompressor()
 
         # 初始化混合检索器
         self.hybrid_retriever = HybridRetriever(
@@ -111,13 +117,19 @@ class RAGChain:
         return "\n\n".join(context_parts)
 
     def invoke(self, user_query: str, top_k: int = 4, enable_rerank: bool = False,
-                conversation_history: list = None):
+               conversation_history: list = None,
+               enable_query_rewrite: bool = False,
+               enable_multi_query: bool = False,
+               enable_compression: bool = False):
         """
         RAG完整执行入口
         :param user_query: 当前用户问题
         :param top_k: 检索返回片段数
         :param enable_rerank: 是否开启重排
         :param conversation_history: 历史对话列表
+        :param enable_query_rewrite: 是否启用查询改写（优化口语化/模糊问题）
+        :param enable_multi_query: 是否启用多查询扩展（扩大召回面）
+        :param enable_compression: 是否启用上下文压缩（精炼检索片段）
         :return: (回答文本, 溯源片段列表)
         """
         if conversation_history is None:
@@ -125,21 +137,56 @@ class RAGChain:
 
         docs = []
 
-        # 1. 检索知识库片段
-        docs = self.hybrid_retriever.retrieve(user_query, top_k=top_k)
+        # ========== 查询优化（改写 + 多查询扩展） ==========
+        if enable_query_rewrite or enable_multi_query:
+            query_list = self.query_optimizer.optimize(
+                query=user_query,
+                conversation_history=conversation_history,
+                enable_rewrite=enable_query_rewrite,
+                enable_multi_query=enable_multi_query,
+                num_queries=3
+            )
+        else:
+            # 不开启优化时，使用原始单查询，完全兼容原有逻辑
+            query_list = [user_query]
+
+        # ========== 支持多查询多路检索，结果合并去重 ==========
+        all_docs = []
+        for q in query_list:
+            # 原有检索逻辑完全不变，循环执行多次
+            batch_docs = self.hybrid_retriever.retrieve(q, top_k=top_k)
+            all_docs.extend(batch_docs)
+
+        # 结果去重：按内容前100字符去重，保留距离最小（最相似）的片段
+        seen = set()
+        unique_docs = []
+        # 按距离升序排序（越小越相似），优先保留高相关度片段
+        for doc in sorted(all_docs, key=lambda x: x.get("distance", 99)):
+            content_key = doc.get("content", doc.get("page_content", ""))[:100]
+            if content_key not in seen:
+                seen.add(content_key)
+                unique_docs.append(doc)
+
+        # 截取最终 top_k 个结果
+        docs = unique_docs[:top_k]
 
         # 调试打印距离（验证完可注释）
         print("[调试] 检索文档距离：", [d.get("distance") for d in docs])
 
-        # 2. 幻觉拦截：distance 在文档根层级
+        # 2. 幻觉拦截 —— 完全保留原有逻辑
         if not docs or all(
-                doc.get("distance", 99) > self.hallucination_threshold for doc in docs):
+                doc.get("distance", 99) > self.hallucination_threshold for doc in docs
+        ):
             return "抱歉，知识库中未查询到与您问题相关的内容，请换个问题或补充文档后再试。", []
 
-        # 3. 拼接上下文
+        # ========== 上下文压缩（精炼检索片段，去除冗余） ==========
+        if enable_compression and docs:
+            docs = self.context_compressor.compress(user_query, docs)
+
+        # 3. 拼接上下文 —— 完全保留原有逻辑
         context_str = "\n------\n".join([doc.get("content", doc.get("page_content", "")) for doc in docs])
 
-        # 4. 构造历史对话文本
+        # 4. 构造历史对话文本 —— 完全保留原有逻辑
         history_str = ""
         for msg in conversation_history:
             role = msg.get("role", "")
@@ -149,7 +196,7 @@ class RAGChain:
             elif role == "assistant":
                 history_str += f"助手：{content}\n"
 
-        # 5. 构造完整消息队列
+        # 5. 构造完整消息队列 —— 完全保留原有逻辑
         system_prompt = f"""
 你是一个专业的知识库问答助手，请严格根据下面提供的参考资料回答用户问题。
 如果参考资料中没有答案，请明确回答不知道，禁止编造内容。
@@ -166,7 +213,7 @@ class RAGChain:
             messages.append({"role": "user", "content": f"之前的对话：\n{history_str}\n请结合上文回答当前问题。"})
         messages.append({"role": "user", "content": user_query})
 
-        # 6. 调用大模型生成
+        # 6. 调用大模型生成 —— 完全保留原有逻辑
         try:
             resp = self.llm_client.chat.completions.create(
                 model=settings.LLM_MODEL_NAME,

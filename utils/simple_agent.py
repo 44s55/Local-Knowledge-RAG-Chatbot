@@ -77,13 +77,20 @@ class SimpleLightAgent:
 
         return decision, reference_docs
 
-    def run(self, user_query: str, top_k: int = 4, enable_rerank: bool = False, conversation_history: list = None):
+    def run(self, user_query: str, top_k: int = 4, enable_rerank: bool = False,
+            conversation_history: list = None,
+            enable_query_rewrite: bool = False,
+            enable_multi_query: bool = False,
+            enable_compression: bool = False):
         """
         Agent对外主入口：完整执行一次问答
         :param user_query: 用户问题
         :param top_k: 检索片段数量
         :param enable_rerank: 是否开启重排
         :param conversation_history: 历史对话列表
+        :param enable_query_rewrite: 是否启用查询改写
+        :param enable_multi_query: 是否启用多查询扩展
+        :param enable_compression: 是否启用上下文压缩
         :return: (回答文本, 溯源片段列表, 决策信息字典)
         """
         # Step1：意图决策
@@ -99,7 +106,11 @@ class SimpleLightAgent:
                 user_query=user_query,
                 top_k=top_k,
                 enable_rerank=enable_rerank,
-                conversation_history=conversation_history
+                conversation_history=conversation_history,
+                # ===== 新增：透传三个检索优化开关 =====
+                enable_query_rewrite=enable_query_rewrite,
+                enable_multi_query=enable_multi_query,
+                enable_compression=enable_compression
             )
         elif tool == "no_tool":
             # Step2-B：闲聊也传入历史，支持连续闲聊

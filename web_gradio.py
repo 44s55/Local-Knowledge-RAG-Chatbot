@@ -108,11 +108,18 @@ def upload_files_to_data(files):
     return result
 
 
-def chat_handle_message(user_message, chat_history, top_k_slider, rerank_switch):
+def chat_handle_message(user_message, chat_history, top_k_slider, rerank_switch,
+                        rewrite_switch, multi_query_switch, compression_switch):
+
     # 形参统一转内部变量
     user_query = user_message
     top_k = int(top_k_slider)
     enable_rerank = rerank_switch
+    enable_rerank = rerank_switch
+    # ===== 新增：三个检索优化开关 =====
+    enable_query_rewrite = rewrite_switch
+    enable_multi_query = multi_query_switch
+    enable_compression = compression_switch
 
     # ========== 把Gradio历史转为OpenAI格式 ==========
     conversation_history = []
@@ -136,8 +143,13 @@ def chat_handle_message(user_message, chat_history, top_k_slider, rerank_switch)
             "question": user_query,
             "history": conversation_history,
             "top_k": top_k,
-            "enable_rerank": enable_rerank
+            "enable_rerank": enable_rerank,
+            # ===== 新增：三个检索优化开关 =====
+            "enable_query_rewrite": enable_query_rewrite,
+            "enable_multi_query": enable_multi_query,
+            "enable_compression": enable_compression
         }
+
         resp = requests.post(
             f"{BACKEND_URL}/chat/stream",
             json=payload,
@@ -250,7 +262,13 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
                 value=False,
                 info="开启后对召回片段做精排，提升答案匹配度"
             )
-
+            # ===== 新增：检索优化开关组 =====
+            with gr.Row():
+                enable_query_rewrite = gr.Checkbox(label="开启 查询改写", value=True, info="优化口语化/模糊问题")
+            with gr.Row():
+                enable_multi_query = gr.Checkbox(label="开启 多查询扩展", value=False, info="扩大召回面，消耗更多Token")
+            with gr.Row():
+                enable_compression = gr.Checkbox(label="开启 上下文压缩", value=False, info="精炼检索片段，提升精准度")
             gr.Markdown("## 🧹操作")
             clear_chat_btn = gr.Button("清空对话会话")
             btn_clear_kb = gr.Button("⚠️清空全部知识库", variant="stop")
@@ -275,7 +293,8 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
     # 回车提交提问：输出对应3个组件
     user_input_box.submit(
         fn=chat_handle_message,
-        inputs=[user_input_box, chatbot_ui, top_k_slider, rerank_checkbox],
+        inputs=[user_input_box, chatbot_ui, top_k_slider, rerank_checkbox,
+                enable_query_rewrite, enable_multi_query, enable_compression],
         outputs=[chatbot_ui, agent_thought_box, source_detail_box]
     )
 

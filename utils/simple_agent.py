@@ -2,6 +2,7 @@ import json
 from openai import OpenAI
 from config.settings import settings
 from utils.rag_chain import RAGChain
+from config.logger import logger
 
 
 class SimpleLightAgent:
@@ -54,6 +55,27 @@ class SimpleLightAgent:
             print(f"[Agent] 决策解析失败，降级默认知识库检索: {str(e)}")
             # 异常兜底：默认走知识库检索，保证服务可用
             return {"tool": "knowledge_search", "thought": "决策异常，默认使用知识库检索"}
+
+    def retrieve(self, user_query: str, top_k: int = 4, enable_rerank: bool = False):
+        """
+        仅做意图判断 + 文档检索，不生成回答
+        :return: (decision: str, reference_docs: list)
+        """
+        # 复制你原来 run() 方法里的意图判断逻辑
+        decision = self.judge_intent(user_query)
+
+        reference_docs = []
+        if decision == "knowledge_search":
+            reference_docs = self.rag_chain.retrieve(
+                query=user_query,
+                top_k=top_k,
+                enable_rerank=enable_rerank
+            )
+            # 相关性阈值过滤（和原逻辑保持一致）
+            if not reference_docs or reference_docs[0].get("distance", 1.0) > 0.75:
+                reference_docs = []
+
+        return decision, reference_docs
 
     def run(self, user_query: str, top_k: int = 4, enable_rerank: bool = False, conversation_history: list = None):
         """

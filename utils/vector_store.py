@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from chromadb.config import Settings
 from typing import List, Dict, Any
 from utils.embedder import Embedder
+from config.logger import logger
 
 # 关闭chroma遥测，消除控制台telemetry报错
 os.environ["CHROMA_TELEMETRY_ENABLED"] = "False"

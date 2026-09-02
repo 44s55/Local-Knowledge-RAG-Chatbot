@@ -4,6 +4,7 @@ from rank_bm25 import BM25Okapi
 from utils.vector_store import BaseVectorStore
 from utils.reranker import Reranker
 from config.settings import settings
+from config.logger import logger
 
 
 class HybridRetriever:

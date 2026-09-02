@@ -1,5 +1,4 @@
-"""
-RAG知识库网页交互界面，基于Gradio4.x实现
+""" RAG知识库网页交互界面，基于Gradio4.x实现
 功能：
 1. 上传PDF/TXT/MD文档，调用后端接口自动完成切片向量化持久入库
 2. 多轮对话问答，调用后端RAG+Agent接口
@@ -10,7 +9,9 @@ RAG知识库网页交互界面，基于Gradio4.x实现
 7. 新增：Reranker重排开关，每次提问实时生效
 8. 新增：Agent决策过程可视化展示
 """
+
 import os
+import json
 
 # 全局关闭所有遥测开关
 os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
@@ -24,13 +25,11 @@ import chromadb
 try:
     # 直接替换遥测核心捕获函数，无视参数数量，直接返回空
     import chromadb.telemetry.events
-
     chromadb.telemetry.events.capture = lambda *args, **kwargs: None
 except Exception:
     try:
         # 兼容其他版本的模块路径
         import chromadb.telemetry
-
         chromadb.telemetry.capture = lambda *args, **kwargs: None
     except Exception:
         pass
@@ -43,23 +42,19 @@ try:
 
     original_json_schema_to_python_type = gcu._json_schema_to_python_type
 
-
     def patched_json_schema_to_python_type(schema, defs):
         if not isinstance(schema, dict):
             return "any"
         return original_json_schema_to_python_type(schema, defs)
 
-
     gcu._json_schema_to_python_type = patched_json_schema_to_python_type
 
     original_get_type = gcu.get_type
-
 
     def patched_get_type(schema):
         if not isinstance(schema, dict):
             return None
         return original_get_type(schema)
-
 
     gcu.get_type = patched_get_type
 except Exception:
@@ -130,58 +125,90 @@ def chat_handle_message(user_message, chat_history, top_k_slider, rerank_switch)
     if len(conversation_history) > 12:
         conversation_history = conversation_history[-12:]
 
+    # 先把用户消息追加到历史，占位待生成的回答
+    chat_history.append((user_message, ""))
+    agent_text = "🤔 正在检索知识库并生成回答..."
+    source_text = "⏳ 检索中..."
+
     try:
-        # 调用后端聊天接口
+        # 调用后端流式聊天接口
         payload = {
             "question": user_query,
             "history": conversation_history,
             "top_k": top_k,
             "enable_rerank": enable_rerank
         }
-        resp = requests.post(f"{BACKEND_URL}/chat", json=payload)
-        data = resp.json()
+        resp = requests.post(
+            f"{BACKEND_URL}/chat/stream",
+            json=payload,
+            stream=True,
+            timeout=120
+        )
 
-        if data["code"] != 0:
-            error_msg = data["msg"]
-            chat_history.append((user_message, f"❌ {error_msg}"))
-            return chat_history, "决策失败", error_msg
-
-        answer = data["data"]["answer"]
-        sources = data["data"].get("reference", [])
-        decision = data["data"].get("decision", {})
-
-    except Exception as e:
-        answer = f"❌ 请求后端失败：{str(e)}"
-        sources = []
+        full_answer = ""
         decision = {}
+        sources = []
+        meta_received = False
 
-    # 追加到对话历史
-    chat_history.append((user_message, answer))
+        # 逐行读取SSE流
+        for raw_line in resp.iter_lines(decode_unicode=True):
+            if not raw_line or not raw_line.startswith("data: "):
+                continue
+            data_str = raw_line.removeprefix("data: ").strip()
+            if data_str == "[DONE]":
+                break
 
-    # ========== 格式化 Agent 决策展示 ==========
-    tool = decision.get("tool", "未知")
-    thought = decision.get("thought", "无")
-    agent_text = f"""**思考原因**：{thought}
+            try:
+                data = json.loads(data_str)
+            except json.JSONDecodeError:
+                continue
 
+            if data["type"] == "meta":
+                # 第一帧：接收检索结果和决策
+                decision = data.get("decision", {})
+                sources = data.get("reference", [])
+                meta_received = True
+                agent_text = "✅ 检索完成，正在生成回答..."
+                source_text = f"已召回 {len(sources)} 个相关片段..."
+
+            elif data["type"] == "text":
+                # 逐字拼接回答，实时刷新聊天框
+                chunk = data.get("content", "")
+                full_answer += chunk
+                chat_history[-1] = (user_message, full_answer)
+                # 流式过程中只更新聊天框，另外两框保持中间状态
+                yield chat_history, agent_text, source_text
+
+        # ========== 流式结束，格式化最终输出 ==========
+        # 格式化 Agent 决策展示
+        tool = decision.get("tool", "未知") if isinstance(decision, dict) else "未知"
+        thought = decision.get("thought", "无") if isinstance(decision, dict) else "无"
+        agent_text = f"""**思考原因**：{thought}
 **选择工具**：{tool}"""
 
-    # ========== 格式化溯源信息输出 ==========
-    source_text = ""
-    if not sources:
-        source_text = "本次未调用知识库检索，无溯源信息。"
-    else:
-        for idx, doc in enumerate(sources):
-            metadata = doc.get("metadata", {})
-            source_text += f"【片段{idx + 1}】\n"
-            source_text += f"文件：{metadata.get('source', '未知')}\n"
-            distance = metadata.get("distance", 'N/A')
-            source_text += f"距离：{distance:.4f}\n" if isinstance(distance, float) else f"距离：{distance}\n"
-            rerank_score = metadata.get('rerank_score')
-            source_text += f"重排分数：{rerank_score if rerank_score is not None else '未开启'}\n"
-            source_text += f"内容：{doc.get('content', '')[:120]}...\n\n"
+        # 格式化溯源信息输出
+        if not sources:
+            source_text = "本次未调用知识库检索，无溯源信息。"
+        else:
+            source_text = ""
+            for idx, doc in enumerate(sources):
+                metadata = doc.get("metadata", {})
+                source_text += f"【片段{idx + 1}】\n"
+                source_text += f"文件：{metadata.get('source', '未知')}\n"
+                distance = metadata.get('distance', 'N/A')
+                source_text += f"距离：{distance:.4f}\n" if isinstance(distance, float) else f"距离：{distance}\n"
+                rerank_score = metadata.get('rerank_score')
+                source_text += f"重排分数：{rerank_score if rerank_score is not None else '未开启'}\n"
+                source_text += f"内容：{doc.get('content', '')[:120]}...\n\n"
 
-    # 统一返回3个结果
-    return chat_history, agent_text, source_text
+        # 最终一次完整更新三个组件
+        chat_history[-1] = (user_message, full_answer)
+        yield chat_history, agent_text, source_text
+
+    except Exception as e:
+        error_msg = f"❌ 请求后端失败：{str(e)}"
+        chat_history[-1] = (user_message, error_msg)
+        yield chat_history, "请求失败", error_msg
 
 
 def clear_chat_session():
@@ -204,7 +231,7 @@ def handle_clear_kb():
 
 # ---------------------- Gradio UI页面布局定义（完全保留原布局） ----------------------
 with gr.Blocks(title="本地RAG知识库问答系统") as demo:
-    gr.Markdown("# 📚 Local‑Knowledge‑RAG‑Chatbot 网页问答端")
+    gr.Markdown("# 📚 Local-Knowledge-RAG-Chatbot 网页问答端")
 
     with gr.Row():
         # 左侧面板：上传、参数、操作按钮
@@ -216,7 +243,7 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
             upload_status_text = gr.Textbox(label="上传状态", interactive=False)
 
             gr.Markdown("## ⚙️检索参数")
-            top_k_slider = gr.Slider(minimum=2, maximum=10, value=4, step=1, label="Top‑K 检索片段数")
+            top_k_slider = gr.Slider(minimum=2, maximum=10, value=4, step=1, label="Top-K 检索片段数")
             # Reranker重排开关
             rerank_checkbox = gr.Checkbox(
                 label="开启Reranker重排",

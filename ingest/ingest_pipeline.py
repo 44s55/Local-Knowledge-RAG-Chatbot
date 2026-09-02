@@ -6,6 +6,7 @@ from utils.embedder import Embedder
 from utils.vector_store import VectorStore
 from utils.hybrid_retriever import HybridRetriever
 from config.settings import settings
+from config.logger import logger
 
 # 根据脚本位置自动推导项目根目录，git兼容，不受pycharm工作目录影响
 SCRIPT_FILE = Path(__file__).resolve()

@@ -1,0 +1,57 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+
+# IDE 文件
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# 环境变量（重要！不要打包进镜像）
+.env
+.env.local
+.env.*.local
+
+# 数据文件（使用 volume 挂载，不打包）
+data/
+uploads/
+models/
+vector_db/
+*.db
+*.sqlite3
+
+# 文档和日志
+logs/
+*.log
+README.md
+docs/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 测试
+tests/
+test_*.py
+pytest_cache/
+.mypy_cache/

@@ -36,11 +36,12 @@ class HybridRetriever:
             threshold=settings.RERANK_THRESHOLD
         )
 
-    def retrieve(self, query: str, top_k: int = None):
+    def retrieve(self, query: str, top_k: int = None, enable_rerank: bool = False):
         """
         【唯一对外检索入口】混合检索全流程
         :param query: 用户查询
         :param top_k: 最终返回片段数量，不传则使用初始化默认值
+        :param enable_rerank: 是否开启本次重排，需全局开关同时开启才生效
         :return: 排序后的文档列表
         """
         # 未传参时使用初始化配置的默认值
@@ -58,14 +59,15 @@ class HybridRetriever:
         if candidates is None:
             candidates = []
 
-        # 4. 重排逻辑：全局开关控制
-        if settings.RERANK_ENABLE:
+        # 4. 重排逻辑：全局开关 + 入参开关同时满足才执行
+        if settings.RERANK_ENABLE and enable_rerank:
             try:
                 # 临时补全重排模块依赖的字段名
                 for doc in candidates:
                     doc["page_content"] = doc["content"]
 
                 reranked_docs = self.reranker.rerank(query, candidates, top_k=top_k)
+
                 # 重排结果兜底
                 if reranked_docs is None:
                     print("[Reranker] 警告：重排返回空结果，降级使用原始检索结果")
@@ -76,6 +78,7 @@ class HybridRetriever:
 
                 print(f"[Reranker] 重排完成，返回 {len(reranked_docs)} 条片段")
                 return reranked_docs
+
             except Exception as e:
                 print(f"[Reranker] 重排调用异常，降级跳过重排: {str(e)}")
                 fallback_docs = candidates[:top_k]
@@ -83,6 +86,10 @@ class HybridRetriever:
                 for d in fallback_docs:
                     d["metadata"]["rerank_score"] = None
                 return fallback_docs
+
+        # 未开启重排时直接返回融合结果
+        return candidates[:top_k]
+
 
         # ==========新增：重排开关关闭的兜底，给metadata写入rerank_score=None，前端渲染兼容==========
         no_rerank_docs = candidates[:top_k]

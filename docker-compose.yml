@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  rag-app:
+    build: .
+    container_name: rag-qa-system
+    ports:
+      - "8000:8000"    # FastAPI
+      - "7860:7860"    # Gradio (if used)
+    volumes:
+      - ./data:/app/data          # Persistent data
+      - ./models:/app/models      # Model cache
+      - ./uploads:/app/uploads    # Uploaded files
+      - ./chroma_db:/app/chroma_db  # ChromaDB persistent storage
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    restart: unless-stopped

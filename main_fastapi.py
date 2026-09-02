@@ -218,6 +218,29 @@ async def clear_history():
     return {"code": 0, "msg": "对话历史已清空"}
 
 
+@app.post("/clear_knowledge_base")
+async def clear_knowledge_base():
+    """清空全部知识库：向量库 + BM25索引"""
+    logger.info("收到清空全部知识库请求")
+    try:
+        # 1. 清空Chroma向量库
+        rag_chain.vector_store.clear()
+        # 2. 重建BM25索引（向量库清空后重建自然为空索引）
+        rag_chain.hybrid_retriever.rebuild_bm25()
+
+        logger.info("知识库已全部清空")
+        return {
+            "code": 0,
+            "msg": "知识库已全部清空"
+        }
+    except Exception as e:
+        logger.error(f"清空知识库异常：{str(e)}", exc_info=True)
+        return {
+            "code": 500,
+            "msg": f"清空失败：{str(e)}"
+        }
+
+
 # ===================== 启动入口 =====================
 if __name__ == "__main__":
     import uvicorn

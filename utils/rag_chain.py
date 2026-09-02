@@ -154,7 +154,8 @@ class RAGChain:
         all_docs = []
         for q in query_list:
             # 原有检索逻辑完全不变，循环执行多次
-            batch_docs = self.hybrid_retriever.retrieve(q, top_k=top_k)
+            batch_docs = self.hybrid_retriever.retrieve(q, top_k=top_k, enable_rerank=enable_rerank)
+
             all_docs.extend(batch_docs)
 
         # 结果去重：按内容前100字符去重，保留距离最小（最相似）的片段

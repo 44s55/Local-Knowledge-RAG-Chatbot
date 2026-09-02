@@ -232,13 +232,20 @@ def clear_chat_session():
     # 返回三个值，分别对应聊天窗口、Agent决策框、溯源框
     return [], "等待提问...", "对话已清空，请发起新问题"
 
-
 def handle_clear_kb():
     """
-    清空全部知识库提示
-    :return: 字符串提示，输出到溯源详情文本框
+    清空全部知识库
+    :return: 操作结果提示，输出到溯源详情文本框
     """
-    return "⚠️ 后端暂未开放清空知识库接口，请在服务端手动操作。"
+    try:
+        resp = requests.post(f"{BACKEND_URL}/clear_knowledge_base", timeout=10)
+        resp_data = resp.json()
+        if resp_data.get("code") == 0:
+            return "✅ 知识库已全部清空，向量库与BM25索引已重置"
+        else:
+            return f"❌ 清空失败：{resp_data.get('msg', '未知错误')}"
+    except Exception as e:
+        return f"❌ 请求失败：{str(e)}"
 
 
 # ---------------------- Gradio UI页面布局定义（完全保留原布局） ----------------------

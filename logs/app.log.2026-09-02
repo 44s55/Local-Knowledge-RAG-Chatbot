@@ -1,0 +1,121 @@
+2026-09-02 11:41:30 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 11:45:46 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 11:49:29 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 11:49:31 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 11:49:34 - INFO - rag_app - 用户提问：什么是杠杆
+2026-09-02 11:49:53 - INFO - rag_app - 用户提问：什么是动力臂
+2026-09-02 11:52:53 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 11:58:21 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 12:01:47 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 12:01:50 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 12:01:52 - INFO - rag_app - 收到流式提问：什么是杠杆
+2026-09-02 12:01:52 - ERROR - rag_app - 流式问答异常：'SimpleLightAgent' object has no attribute 'judge_intent'
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\main_fastapi.py", line 151, in chat_stream
+    decision = agent.judge_intent(req.question)
+AttributeError: 'SimpleLightAgent' object has no attribute 'judge_intent'
+2026-09-02 12:02:00 - INFO - rag_app - 收到流式提问：什么是杠杆
+2026-09-02 12:02:00 - ERROR - rag_app - 流式问答异常：'SimpleLightAgent' object has no attribute 'judge_intent'
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\main_fastapi.py", line 151, in chat_stream
+    decision = agent.judge_intent(req.question)
+AttributeError: 'SimpleLightAgent' object has no attribute 'judge_intent'
+2026-09-02 12:02:09 - INFO - rag_app - 收到流式提问：什么是杠杆的平衡原理
+2026-09-02 12:02:09 - ERROR - rag_app - 流式问答异常：'SimpleLightAgent' object has no attribute 'judge_intent'
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\main_fastapi.py", line 151, in chat_stream
+    decision = agent.judge_intent(req.question)
+AttributeError: 'SimpleLightAgent' object has no attribute 'judge_intent'
+2026-09-02 12:05:31 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 12:05:43 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 12:05:47 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 12:05:52 - INFO - rag_app - 收到流式提问：杠杆的平衡条件
+2026-09-02 12:05:54 - ERROR - rag_app - 流式大模型调用失败: 'RAGChain' object has no attribute 'client'
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\utils\rag_chain.py", line 86, in stream_chat
+    response = self.client.chat.completions.create(
+AttributeError: 'RAGChain' object has no attribute 'client'
+2026-09-02 12:11:34 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 12:11:57 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 12:12:00 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 12:12:04 - INFO - rag_app - 收到流式提问：杠杆的平衡原理
+2026-09-02 12:12:34 - INFO - rag_app - 收到流式提问：杠杆的平衡原理，公式
+2026-09-02 12:19:21 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 12:22:11 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 13:34:24 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 13:35:03 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 13:35:06 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 13:35:15 - INFO - rag_app - 收到流式提问：杠杆的平衡条件
+2026-09-02 22:58:50 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 22:59:18 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 22:59:20 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 22:59:25 - INFO - rag_app - 收到流式提问：什么是动力臂
+2026-09-02 22:59:25 - ERROR - rag_app - 流式问答异常：'RAGChain' object has no attribute 'invoke'
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\main_fastapi.py", line 161, in chat_stream
+    _, reference_docs, decision = agent.run(
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\utils\simple_agent.py", line 105, in run
+    answer, sources = self.rag_chain.invoke(
+AttributeError: 'RAGChain' object has no attribute 'invoke'
+2026-09-02 22:59:32 - INFO - rag_app - 收到流式提问：什么是阻力臂
+2026-09-02 22:59:33 - ERROR - rag_app - 流式问答异常：'RAGChain' object has no attribute 'invoke'
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\main_fastapi.py", line 161, in chat_stream
+    _, reference_docs, decision = agent.run(
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\utils\simple_agent.py", line 105, in run
+    answer, sources = self.rag_chain.invoke(
+AttributeError: 'RAGChain' object has no attribute 'invoke'
+2026-09-02 22:59:52 - INFO - rag_app - 收到流式提问：杠杆平衡条配件
+2026-09-02 22:59:53 - ERROR - rag_app - 流式问答异常：'RAGChain' object has no attribute 'invoke'
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\main_fastapi.py", line 161, in chat_stream
+    _, reference_docs, decision = agent.run(
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\utils\simple_agent.py", line 105, in run
+    answer, sources = self.rag_chain.invoke(
+AttributeError: 'RAGChain' object has no attribute 'invoke'
+2026-09-02 23:00:00 - INFO - rag_app - 收到流式提问：杠杆平衡条件
+2026-09-02 23:00:00 - ERROR - rag_app - 流式问答异常：'RAGChain' object has no attribute 'invoke'
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\main_fastapi.py", line 161, in chat_stream
+    _, reference_docs, decision = agent.run(
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\utils\simple_agent.py", line 105, in run
+    answer, sources = self.rag_chain.invoke(
+AttributeError: 'RAGChain' object has no attribute 'invoke'
+2026-09-02 23:04:12 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 23:04:27 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 23:04:30 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 23:04:42 - INFO - rag_app - 收到流式提问：杠杆的平衡条配件
+2026-09-02 23:04:42 - ERROR - rag_app - 流式问答异常：'RAGChain' object has no attribute 'invoke'
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\main_fastapi.py", line 161, in chat_stream
+    _, reference_docs, decision = agent.run(
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\utils\simple_agent.py", line 105, in run
+    answer, sources = self.rag_chain.invoke(
+AttributeError: 'RAGChain' object has no attribute 'invoke'
+2026-09-02 23:07:03 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 23:07:14 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 23:07:18 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 23:07:22 - INFO - rag_app - 收到流式提问：杠杆的平衡条件
+2026-09-02 23:07:23 - INFO - rag_app - [QueryOptimizer] 查询改写: '杠杆的平衡条件' -> '杠杆平衡条件公式及原理'
+2026-09-02 23:07:24 - INFO - rag_app - [QueryOptimizer] 多查询扩展: 生成 4 个查询
+2026-09-02 23:07:25 - INFO - rag_app - [ContextCompressor] 压缩完成: 2 -> 2 个有效片段
+2026-09-02 23:49:53 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 23:50:04 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 23:50:07 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 23:50:16 - INFO - rag_app - 收到流式提问：杠杆的平衡条件
+2026-09-02 23:50:17 - INFO - rag_app - [QueryOptimizer] 查询改写: '杠杆的平衡条件' -> '杠杆平衡条件公式及原理'
+2026-09-02 23:50:28 - INFO - rag_app - 收到清空全部知识库请求
+2026-09-02 23:50:28 - ERROR - rag_app - 清空知识库异常：HybridRetriever.rebuild_bm25() takes 1 positional argument but 2 were given
+Traceback (most recent call last):
+  File "D:\AI_Projects\Local-Knowledge-RAG-Chatbot\main_fastapi.py", line 229, in clear_knowledge_base
+    rag_chain.hybrid_retriever.rebuild_bm25([])
+TypeError: HybridRetriever.rebuild_bm25() takes 1 positional argument but 2 were given
+2026-09-02 23:52:26 - INFO - rag_app - ✅ FastAPI RAG后端服务准备启动
+2026-09-02 23:52:33 - INFO - rag_app - 收到上传文件请求：111.pdf
+2026-09-02 23:52:35 - INFO - rag_app - 文件 111.pdf 解析入库成功
+2026-09-02 23:52:42 - INFO - rag_app - 收到流式提问：杠杆的平衡原理
+2026-09-02 23:52:43 - INFO - rag_app - [QueryOptimizer] 查询改写: '杠杆的平衡原理' -> '杠杆的平衡条件公式及原理'
+2026-09-02 23:52:47 - INFO - rag_app - 收到清空全部知识库请求
+2026-09-02 23:52:47 - INFO - rag_app - 知识库已全部清空
+2026-09-02 23:52:49 - INFO - rag_app - 收到流式提问：杠杆的平衡原理
+2026-09-02 23:52:50 - INFO - rag_app - [QueryOptimizer] 查询改写: '杠杆的平衡原理' -> '杠杆的平衡条件公式及原理'

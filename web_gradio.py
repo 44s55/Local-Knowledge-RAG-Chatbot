@@ -1,4 +1,5 @@
-""" RAG知识库网页交互界面，基于Gradio4.x实现
+"""
+RAG知识库网页交互界面，基于Gradio4.x实现
 功能：
 1. 上传PDF/TXT/MD文档，调用后端接口自动完成切片向量化持久入库
 2. 多轮对话问答，调用后端RAG+Agent接口
@@ -115,8 +116,7 @@ def chat_handle_message(user_message, chat_history, top_k_slider, rerank_switch,
     user_query = user_message
     top_k = int(top_k_slider)
     enable_rerank = rerank_switch
-    enable_rerank = rerank_switch
-    # ===== 新增：三个检索优化开关 =====
+    # ===== 三个检索优化开关 =====
     enable_query_rewrite = rewrite_switch
     enable_multi_query = multi_query_switch
     enable_compression = compression_switch
@@ -144,7 +144,7 @@ def chat_handle_message(user_message, chat_history, top_k_slider, rerank_switch,
             "history": conversation_history,
             "top_k": top_k,
             "enable_rerank": enable_rerank,
-            # ===== 新增：三个检索优化开关 =====
+            # ===== 三个检索优化开关 =====
             "enable_query_rewrite": enable_query_rewrite,
             "enable_multi_query": enable_multi_query,
             "enable_compression": enable_compression
@@ -207,10 +207,17 @@ def chat_handle_message(user_message, chat_history, top_k_slider, rerank_switch,
                 metadata = doc.get("metadata", {})
                 source_text += f"【片段{idx + 1}】\n"
                 source_text += f"文件：{metadata.get('source', '未知')}\n"
-                distance = metadata.get('distance', 'N/A')
-                source_text += f"距离：{distance:.4f}\n" if isinstance(distance, float) else f"距离：{distance}\n"
-                rerank_score = metadata.get('rerank_score')
-                source_text += f"重排分数：{rerank_score if rerank_score is not None else '未开启'}\n"
+                # distance、rerank_score 在字典顶层，不在metadata内部
+                distance = doc.get('distance')
+                if isinstance(distance, float):
+                    source_text += f"距离：{distance:.4f}\n"
+                else:
+                    source_text += f"距离：{distance if distance is not None else 'N/A'}\n"
+                rerank_score = doc.get('rerank_score')
+                if isinstance(rerank_score, float):
+                    source_text += f"重排分数：{rerank_score:.4f}\n"
+                else:
+                    source_text += "重排分数：未开启\n"
                 source_text += f"内容：{doc.get('content', '')[:120]}...\n\n"
 
         # 最终一次完整更新三个组件
@@ -231,6 +238,7 @@ def clear_chat_session():
         pass
     # 返回三个值，分别对应聊天窗口、Agent决策框、溯源框
     return [], "等待提问...", "对话已清空，请发起新问题"
+
 
 def handle_clear_kb():
     """
@@ -269,13 +277,14 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
                 value=False,
                 info="开启后对召回片段做精排，提升答案匹配度"
             )
-            # ===== 新增：检索优化开关组 =====
+            # ===== 检索优化开关组 =====
             with gr.Row():
-                enable_query_rewrite = gr.Checkbox(label="开启 查询改写", value=True, info="优化口语化/模糊问题")
+                enable_query_rewrite = gr.Checkbox(label="开启 查询改写", value=False, info="优化口语化/模糊问题")
             with gr.Row():
                 enable_multi_query = gr.Checkbox(label="开启 多查询扩展", value=False, info="扩大召回面，消耗更多Token")
             with gr.Row():
                 enable_compression = gr.Checkbox(label="开启 上下文压缩", value=False, info="精炼检索片段，提升精准度")
+
             gr.Markdown("## 🧹操作")
             clear_chat_btn = gr.Button("清空对话会话")
             btn_clear_kb = gr.Button("⚠️清空全部知识库", variant="stop")
@@ -285,7 +294,7 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
             chatbot_ui = gr.Chatbot(label="问答对话窗口", height=520)
             user_input_box = gr.Textbox(label="请输入你的问题", placeholder="基于知识库提问...")
 
-            # 新增：Agent决策过程展示框
+            # Agent决策过程展示框
             agent_thought_box = gr.Textbox(label="🤖 Agent决策过程", value="等待提问...", interactive=False, lines=3)
 
             source_detail_box = gr.Textbox(label="📚 检索溯源详情", interactive=False, lines=14)
@@ -318,6 +327,7 @@ with gr.Blocks(title="本地RAG知识库问答系统") as demo:
         inputs=[],
         outputs=[source_detail_box]
     )
+
 
 if __name__ == "__main__":
     demo.launch(

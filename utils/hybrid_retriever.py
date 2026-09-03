@@ -52,12 +52,32 @@ class HybridRetriever:
         bm25_docs = self._bm25_retrieve(query, top_k=self.top_n_sparse)
         # 2. 向量稠密检索
         vector_docs = self.vector_store.search(query, top_k=self.top_n_dense)
+        # =========【修复】向量检索返回doc，保证顶层一定有 distance、rerank_score =========
+        for vec_doc in vector_docs:
+            if "distance" not in vec_doc:
+                vec_doc["distance"] = None
+            if "rerank_score" not in vec_doc:
+                vec_doc["rerank_score"] = None
+
         # 3. RRF 分数融合
         candidates = self._rrf_fusion([bm25_docs, vector_docs])
+
+
+        # =========新增调试打印========
+        if len(candidates) > 0:
+            print(f"【DEBUG‑RRF后第一条】{candidates[0]}")
+        # =============================
 
         # 安全兜底：确保候选集永远是列表
         if candidates is None:
             candidates = []
+
+
+
+        # 给候选集初始化顶层rerank_score（注意：顶层key，不放进metadata）
+        for doc in candidates:
+            if "rerank_score" not in doc:
+                doc["rerank_score"] = None
 
         # 4. 重排逻辑：全局开关 + 入参开关同时满足才执行
         if settings.RERANK_ENABLE and enable_rerank:
@@ -71,9 +91,6 @@ class HybridRetriever:
                 # 重排结果兜底
                 if reranked_docs is None:
                     print("[Reranker] 警告：重排返回空结果，降级使用原始检索结果")
-                    # 兜底给metadata补上rerank_score=None
-                    for d in candidates[:top_k]:
-                        d["metadata"]["rerank_score"] = None
                     return candidates[:top_k]
 
                 print(f"[Reranker] 重排完成，返回 {len(reranked_docs)} 条片段")
@@ -82,20 +99,10 @@ class HybridRetriever:
             except Exception as e:
                 print(f"[Reranker] 重排调用异常，降级跳过重排: {str(e)}")
                 fallback_docs = candidates[:top_k]
-                # API异常降级，给每个文档补rerank_score=None，前端识别
-                for d in fallback_docs:
-                    d["metadata"]["rerank_score"] = None
                 return fallback_docs
 
         # 未开启重排时直接返回融合结果
         return candidates[:top_k]
-
-
-        # ==========新增：重排开关关闭的兜底，给metadata写入rerank_score=None，前端渲染兼容==========
-        no_rerank_docs = candidates[:top_k]
-        for d in no_rerank_docs:
-            d["metadata"]["rerank_score"] = None
-        return no_rerank_docs
 
     def build_bm25_index(self, docs: List[Dict[str, Any]]) -> None:
         """基于传入文档构建BM25索引"""
@@ -122,7 +129,8 @@ class HybridRetriever:
             result_list.append({
                 "content": doc_item["content"],
                 "metadata": doc_item["metadata"],
-                "distance": 0.0  # BM25无向量距离，占位
+                "distance": 0.0,  # BM25无向量距离，占位
+                "rerank_score": None
             })
         return result_list
 
@@ -204,7 +212,6 @@ if __name__ == "__main__":
         {"content": "大模型幻觉是生成和知识库无关的虚假内容", "metadata": {"source": "note4"}},
     ]
 
-
     class MockVectorStore(BaseVectorStore):
         def add_chunks(self, chunks): pass
 
@@ -212,7 +219,6 @@ if __name__ == "__main__":
 
         def similarity_search(self, query_text, top_k):
             return mock_docs[:2]
-
 
     retriever = HybridRetriever(
         vector_store=MockVectorStore(),
@@ -224,4 +230,4 @@ if __name__ == "__main__":
 
     print("===混合检索输出结果===")
     for idx, item in enumerate(output):
-        print(f"{idx + 1}. {item['content']} | source:{item['metadata']['source']}")
+        print(f"{idx + 1}. {item['content']} | source:{item['metadata']['source']} | distance:{item['distance']} | rerank_score:{item['rerank_score']}")

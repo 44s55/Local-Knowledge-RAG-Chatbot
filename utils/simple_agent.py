@@ -1,3 +1,4 @@
+# utils/simple_agent.py
 import json
 from openai import OpenAI
 from config.settings import settings
@@ -62,10 +63,10 @@ class SimpleLightAgent:
         :return: (decision: str, reference_docs: list)
         """
         # 复制你原来 run() 方法里的意图判断逻辑
-        decision = self.judge_intent(user_query)
+        decision = self._plan(user_query)
 
         reference_docs = []
-        if decision == "knowledge_search":
+        if decision.get("tool") == "knowledge_search":
             reference_docs = self.rag_chain.retrieve(
                 query=user_query,
                 top_k=top_k,
@@ -101,7 +102,7 @@ class SimpleLightAgent:
 
         sources = []
         if tool == "knowledge_search":
-            # Step2-A：调用RAG，传入历史对话
+            # Step2‑A：调用RAG，传入历史对话
             answer, sources = self.rag_chain.invoke(
                 user_query=user_query,
                 top_k=top_k,
@@ -112,8 +113,18 @@ class SimpleLightAgent:
                 enable_multi_query=enable_multi_query,
                 enable_compression=enable_compression
             )
+            # ==========新增调试打印 + 兜底补字段，不改动业务==========
+            if sources:
+                print(f"[Agent‑DEBUG]返回第一条溯源结构: {sources[0]}")
+            # 兜底：保证字典key一定存在
+            for doc in sources:
+                if "distance" not in doc:
+                    doc["distance"] = None
+                if "rerank_score" not in doc:
+                    doc["rerank_score"] = None
+
         elif tool == "no_tool":
-            # Step2-B：闲聊也传入历史，支持连续闲聊
+            # Step2‑B：闲聊也传入历史，支持连续闲聊
             try:
                 messages = []
                 if conversation_history:

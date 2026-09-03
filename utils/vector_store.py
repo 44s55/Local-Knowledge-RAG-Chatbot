@@ -100,7 +100,7 @@ class VectorStore(BaseVectorStore):
     def search(self, query_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
         """
         根据用户问题检索知识库
-        返回格式：[{"content":"文本","metadata":dict,"distance":float}, ...]
+        返回格式：[{"content":"文本","metadata":dict,"distance":float,"rerank_score":None}, ...]
         保证metadata永远是字典对象，不会返回None，防止 .get() 调用报错
         """
         query_embedding = self.embedder.embed_text(query_text)
@@ -121,6 +121,7 @@ class VectorStore(BaseVectorStore):
             output.append({
                 "content": doc_list[i],
                 "distance": dist_list[i],
+                "rerank_score": None,   # ✅向量检索返回时，初始化顶层重分数字段
                 "metadata": safe_meta
             })
         return output

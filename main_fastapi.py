@@ -25,18 +25,17 @@ logger.info("✅ FastAPI RAG后端服务准备启动")
 rag_chain = RAGChain()
 agent = SimpleLightAgent(rag_chain=rag_chain)
 
-
 # ===================== 请求体定义 =====================
 class ChatRequest(BaseModel):
     question: str
     history: List[Dict] = []
     top_k: int = 4
-    enable_rerank: bool = False
+    # 【修复】默认值读取settings全局重排开关，不再硬编码False
+    enable_rerank: bool = settings.RERANK_ENABLE
     # ===== 新增：检索优化开关（和前端payload字段一一对应）=====
     enable_query_rewrite: bool = False   # 查询改写
     enable_multi_query: bool = False     # 多查询扩展
     enable_compression: bool = False     # 上下文压缩
-
 
 # ===================== 全局异常处理器（兜底） =====================
 @app.exception_handler(FileNotSupportError)
@@ -47,7 +46,6 @@ async def file_not_support_handler(request: Request, exc: FileNotSupportError):
         content={"code": 400, "msg": str(exc), "data": None}
     )
 
-
 @app.exception_handler(KnowledgeBaseEmptyError)
 async def knowledge_empty_handler(request: Request, exc: KnowledgeBaseEmptyError):
     logger.warning(f"知识库为空: {str(exc)}")
@@ -55,7 +53,6 @@ async def knowledge_empty_handler(request: Request, exc: KnowledgeBaseEmptyError
         status_code=200,
         content={"code": 400, "msg": str(exc), "data": None}
     )
-
 
 @app.exception_handler(LLMRequestError)
 async def llm_request_handler(request: Request, exc: LLMRequestError):
@@ -65,7 +62,6 @@ async def llm_request_handler(request: Request, exc: LLMRequestError):
         content={"code": 500, "msg": "大模型服务调用失败，请稍后重试", "data": None}
     )
 
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"接口全局异常: {str(exc)}", exc_info=True)
@@ -73,7 +69,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=200,
         content={"code": 500, "msg": "系统内部异常，请稍后重试", "data": None}
     )
-
 
 # ===================== 接口定义 =====================
 @app.post("/upload", summary="上传文档并解析入库")
@@ -114,7 +109,6 @@ async def upload_document(file: UploadFile = File(...)):
         logger.error(f"上传解析异常：{str(e)}", exc_info=True)
         return {"code": 500, "msg": "文档解析失败，请检查文件格式或重试"}
 
-
 @app.post("/chat", summary="知识库问答接口")
 async def chat(req: ChatRequest):
     logger.info(f"用户提问：{req.question}")
@@ -130,6 +124,13 @@ async def chat(req: ChatRequest):
             enable_multi_query=req.enable_multi_query,
             enable_compression=req.enable_compression
         )
+
+        # 【修复兜底】保证每条溯源字段一定存在，前端不会N/A
+        for doc in reference_docs:
+            if "distance" not in doc:
+                doc["distance"] = None
+            if "rerank_score" not in doc:
+                doc["rerank_score"] = None
 
         return {
             "code": 0,
@@ -151,7 +152,6 @@ async def chat(req: ChatRequest):
         logger.error(f"问答异常：{str(e)}", exc_info=True)
         return {"code": 500, "msg": "系统内部异常，请稍后重试"}
 
-
 @app.post("/chat/stream", summary="流式知识库问答接口（SSE）")
 async def chat_stream(req: ChatRequest):
     logger.info(f"收到流式提问：{req.question}")
@@ -168,6 +168,13 @@ async def chat_stream(req: ChatRequest):
             enable_multi_query=req.enable_multi_query,
             enable_compression=req.enable_compression
         )
+
+        # 【修复兜底】保证溯源每条字段一定存在，distance、rerank_score，防止前端N/A
+        for doc in reference_docs:
+            if "distance" not in doc:
+                doc["distance"] = None
+            if "rerank_score" not in doc:
+                doc["rerank_score"] = None
 
         # 2. 流式生成器
         def generate():
@@ -211,12 +218,10 @@ async def chat_stream(req: ChatRequest):
             content={"code": 500, "msg": "流式生成失败", "data": None}
         )
 
-
 @app.post("/clear_history", summary="清空对话上下文")
 async def clear_history():
     logger.info("请求清空对话历史")
     return {"code": 0, "msg": "对话历史已清空"}
-
 
 @app.post("/clear_knowledge_base")
 async def clear_knowledge_base():
@@ -239,7 +244,6 @@ async def clear_knowledge_base():
             "code": 500,
             "msg": f"清空失败：{str(e)}"
         }
-
 
 # ===================== 启动入口 =====================
 if __name__ == "__main__":

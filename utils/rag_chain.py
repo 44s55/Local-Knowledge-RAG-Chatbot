@@ -117,10 +117,10 @@ class RAGChain:
         return "\n\n".join(context_parts)
 
     def invoke(self, user_query: str, top_k: int = 4, enable_rerank: bool = False,
-               conversation_history: list = None,
-               enable_query_rewrite: bool = False,
-               enable_multi_query: bool = False,
-               enable_compression: bool = False):
+                conversation_history: list = None,
+                enable_query_rewrite: bool = False,
+                enable_multi_query: bool = False,
+                enable_compression: bool = False):
         """
         RAG完整执行入口
         :param user_query: 当前用户问题
